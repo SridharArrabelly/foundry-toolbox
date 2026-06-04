@@ -20,9 +20,8 @@ from azure.ai.projects.models import (
     AzureAISearchQueryType,
     AzureAISearchTool,
     AzureAISearchToolResource,
-    BingGroundingSearchConfiguration,
-    BingGroundingSearchToolParameters,
-    BingGroundingTool,
+    SearchContextSize,
+    WebSearchTool,
 )
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -42,7 +41,9 @@ def main() -> int:
     toolbox_name = _require("TOOLBOX_NAME")
     search_conn_name = _require("SEARCH_CONNECTION_NAME")
     search_index = _require("SEARCH_INDEX_NAME")
-    bing_conn_name = os.environ.get("BING_CONNECTION_NAME", "").strip()
+    enable_web_search = os.environ.get("ENABLE_WEB_SEARCH", "true").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
     client = AIProjectClient(
         endpoint=project_endpoint,
@@ -73,32 +74,25 @@ def main() -> int:
         ),
     ]
 
-    if bing_conn_name:
-        print(f"-> resolving bing grounding connection: {bing_conn_name}")
-        bing_conn = client.connections.get(name=bing_conn_name)
-        print(f"   connection id: {bing_conn.id}")
+    if enable_web_search:
+        # Foundry routes `web_search` to the project's Grounding-with-Bing
+        # connection automatically — no explicit project_connection_id needed
+        # here. Toolboxes do NOT accept tool type `bing_grounding`; allowed
+        # types are mcp, web_search, azure_ai_search, openapi, etc.
         tools.append(
-            BingGroundingTool(
-                name="bing-grounding",
+            WebSearchTool(
+                name="bing-web-search",
                 description=(
-                    "Grounded web search for external context: news, share "
-                    "prices, competitive intelligence, telco industry "
-                    "highlights, regulatory updates. Use this whenever the "
-                    "question needs current, public information that is not "
-                    "in internal meeting minutes."
+                    "Grounded public web search via Bing. Use for external "
+                    "context: current news, share prices, competitive "
+                    "intelligence, telco industry highlights, regulatory "
+                    "updates — anything not in internal meeting minutes."
                 ),
-                bing_grounding=BingGroundingSearchToolParameters(
-                    search_configurations=[
-                        BingGroundingSearchConfiguration(
-                            project_connection_id=bing_conn.id,
-                            count=5,
-                        ),
-                    ],
-                ),
+                search_context_size=SearchContextSize.MEDIUM,
             )
         )
     else:
-        print("-> BING_CONNECTION_NAME not set, skipping Bing grounding tool")
+        print("-> ENABLE_WEB_SEARCH=false, skipping web search tool")
 
     print(f"-> creating toolbox version: {toolbox_name} ({len(tools)} tool(s))")
     toolbox_version = client.beta.toolboxes.create_version(
