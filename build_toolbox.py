@@ -66,7 +66,7 @@ def main() -> int:
                     AISearchIndexResource(
                         project_connection_id=search_conn.id,
                         index_name=search_index,
-                        query_type=AzureAISearchQueryType.SIMPLE,
+                        query_type=AzureAISearchQueryType.VECTOR_SIMPLE_HYBRID,
                         top_k=5,
                     ),
                 ],

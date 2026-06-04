@@ -1149,6 +1149,7 @@ dependencies = [
     { name = "azure-ai-projects" },
     { name = "azure-identity" },
     { name = "httpx" },
+    { name = "opentelemetry-sdk" },
     { name = "python-dotenv" },
 ]
 
@@ -1158,6 +1159,7 @@ requires-dist = [
     { name = "azure-ai-projects", specifier = ">=1.1.0b1" },
     { name = "azure-identity", specifier = ">=1.19.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.42.1" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
 ]
 

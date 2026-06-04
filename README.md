@@ -222,6 +222,36 @@ Source: Board Meeting – 15 September 2023, "ESG in Strategy & Compensation" se
 
 ---
 
+---
+
+## Observability
+
+Every run prints a per-run trace summary so you can see exactly which tools fired, how long each took, and where the wall time went:
+
+```
+==============================================================================
+RUN TRACE
+==============================================================================
+ #  tool                                       duration  status
+------------------------------------------------------------------------------
+ 1  meeting-mins-ai-search                     12074 ms  ok
+ 2  bing-web-search                            11742 ms  ok
+------------------------------------------------------------------------------
+  tool calls:            2
+  time in tools:            23816 ms
+  time in model/network:     4687 ms
+  time to first token:      19118 ms
+  total wall time:          28504 ms
+  tokens (in/out):       2840 / 536
+==============================================================================
+```
+
+How it works: `main.py` calls `agent.run(question, stream=True)` and inspects each `AgentResponseUpdate`'s `contents`. Tool calls surface as `mcp_server_tool_call` / `mcp_server_tool_result` content items (with `tool_name`, `server_name`, `arguments`, `output`); usage surfaces as a `usage` content item. Durations are wall-clock between call and result on the client.
+
+For full distributed traces (chat client + MCP tools + http spans), set `ENABLE_OTEL_CONSOLE=true` and a console OTel span exporter is wired up via `agent_framework.observability.enable_instrumentation`. Point an OTLP exporter at App Insights / Jaeger / etc. for production.
+
+---
+
 ## Gotchas (learned the hard way)
 
 | Issue | Resolution |
