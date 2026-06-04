@@ -1,5 +1,7 @@
 """
-Build (or update) a Foundry Toolbox containing the meeting-mins AI Search tool.
+Build (or update) a Foundry Toolbox that bundles:
+  - Azure AI Search over the meeting-mins-index (internal grounding)
+  - Bing Grounding (external news / share prices / industry highlights)
 
 Run once to create a toolbox version, then copy the printed MCP endpoint
 into .env as FOUNDRY_TOOLBOX_ENDPOINT. The agent in main.py consumes it.
@@ -18,6 +20,9 @@ from azure.ai.projects.models import (
     AzureAISearchQueryType,
     AzureAISearchTool,
     AzureAISearchToolResource,
+    BingGroundingSearchConfiguration,
+    BingGroundingSearchToolParameters,
+    BingGroundingTool,
 )
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -37,6 +42,7 @@ def main() -> int:
     toolbox_name = _require("TOOLBOX_NAME")
     search_conn_name = _require("SEARCH_CONNECTION_NAME")
     search_index = _require("SEARCH_INDEX_NAME")
+    bing_conn_name = os.environ.get("BING_CONNECTION_NAME", "").strip()
 
     client = AIProjectClient(
         endpoint=project_endpoint,
@@ -44,32 +50,64 @@ def main() -> int:
     )
 
     print(f"-> resolving search connection: {search_conn_name}")
-    connection = client.connections.get(name=search_conn_name)
-    print(f"   connection id: {connection.id}")
+    search_conn = client.connections.get(name=search_conn_name)
+    print(f"   connection id: {search_conn.id}")
 
-    search_tool = AzureAISearchTool(
-        name="meeting-mins-ai-search",
-        description="Search meeting minutes for decisions and action items.",
-        azure_ai_search=AzureAISearchToolResource(
-            indexes=[
-                AISearchIndexResource(
-                    project_connection_id=connection.id,
-                    index_name=search_index,
-                    query_type=AzureAISearchQueryType.SIMPLE,
-                    top_k=5,
-                ),
-            ],
+    tools = [
+        AzureAISearchTool(
+            name="meeting-mins-ai-search",
+            description=(
+                "Search internal MTN executive board meeting minutes for "
+                "decisions, action items, owners, and historical context."
+            ),
+            azure_ai_search=AzureAISearchToolResource(
+                indexes=[
+                    AISearchIndexResource(
+                        project_connection_id=search_conn.id,
+                        index_name=search_index,
+                        query_type=AzureAISearchQueryType.SIMPLE,
+                        top_k=5,
+                    ),
+                ],
+            ),
         ),
-    )
+    ]
 
-    print(f"-> creating toolbox version: {toolbox_name}")
+    if bing_conn_name:
+        print(f"-> resolving bing grounding connection: {bing_conn_name}")
+        bing_conn = client.connections.get(name=bing_conn_name)
+        print(f"   connection id: {bing_conn.id}")
+        tools.append(
+            BingGroundingTool(
+                name="bing-grounding",
+                description=(
+                    "Grounded web search for external context: news, share "
+                    "prices, competitive intelligence, telco industry "
+                    "highlights, regulatory updates. Use this whenever the "
+                    "question needs current, public information that is not "
+                    "in internal meeting minutes."
+                ),
+                bing_grounding=BingGroundingSearchToolParameters(
+                    search_configurations=[
+                        BingGroundingSearchConfiguration(
+                            project_connection_id=bing_conn.id,
+                            count=5,
+                        ),
+                    ],
+                ),
+            )
+        )
+    else:
+        print("-> BING_CONNECTION_NAME not set, skipping Bing grounding tool")
+
+    print(f"-> creating toolbox version: {toolbox_name} ({len(tools)} tool(s))")
     toolbox_version = client.beta.toolboxes.create_version(
         name=toolbox_name,
         description=(
-            "Spike toolbox for evaluating Foundry Toolboxes against the "
-            "meeting-mins-index AI Search index."
+            "MTN executive copilot toolbox: internal meeting minutes (AI "
+            "Search) + external grounding (Bing)."
         ),
-        tools=[search_tool],
+        tools=tools,
     )
 
     print(f"\nCreated toolbox: {toolbox_version.name}, version: {toolbox_version.version}")
